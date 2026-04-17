@@ -1,4 +1,4 @@
-# WSCP Gemini - Pesquisa de Compostos e Medicamentos
+# WSCP - Pesquisa de Compostos e Medicamentos
 
 Este projeto é uma ferramenta baseada em **FastAPI** para buscar informações detalhadas sobre compostos químicos e medicamentos utilizando as APIs do **PubChem** (NCBI). O projeto está dividido em duas versões evolutivas, cada uma com foco em diferentes capacidades de busca.
 
