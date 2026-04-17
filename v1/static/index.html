@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PubChem Search API - v1</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { max-width: 600px; width: 100%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
+        input { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; }
+        button { padding: 12px 25px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        #result { display: none; margin-top: 20px; border: 1px solid #eee; padding: 20px; border-radius: 10px; }
+        .label { font-weight: bold; }
+        img { max-width: 200px; display: block; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Busca PubChem (v1)</h1>
+        <div class="search-box">
+            <input type="text" id="query" placeholder="Nome do composto...">
+            <button onclick="search()">Buscar</button>
+        </div>
+        <div id="result">
+            <p><span class="label">Nome:</span> <span id="common_name"></span></p>
+            <p><span class="label">IUPAC:</span> <span id="iupac"></span></p>
+            <p><span class="label">CAS:</span> <span id="cas"></span></p>
+            <p><span class="label">Peso:</span> <span id="weight"></span> g/mol</p>
+            <p><span class="label">Fórmula:</span> <span id="formula"></span></p>
+            <img id="mol-img" src="">
+            <button id="download-btn" style="margin-top: 15px; background: #27ae60;">Download JSON</button>
+        </div>
+    </div>
+    <script>
+        let currentData = null;
+
+        async function search() {
+            const q = document.getElementById('query').value;
+            const resDiv = document.getElementById('result');
+            try {
+                const res = await fetch(`/api/search?q=${q}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail);
+                
+                currentData = data;
+                document.getElementById('common_name').innerText = data.common_name;
+                document.getElementById('iupac').innerText = data.iupac;
+                document.getElementById('cas').innerText = data.cas;
+                document.getElementById('weight').innerText = data.weight;
+                document.getElementById('formula').innerText = data.formula;
+                document.getElementById('mol-img').src = data.structure_url;
+                resDiv.style.display = 'block';
+
+                document.getElementById('download-btn').onclick = () => downloadJson(data);
+            } catch (e) { alert(e.message); }
+        }
+
+        async function downloadJson(item) {
+            try {
+                const response = await fetch(item.structure_url);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                
+                reader.onloadend = function() {
+                    const base64data = reader.result;
+                    const exportData = {
+                        ...item,
+                        image_base64: base64data,
+                        download_timestamp: new Date().toISOString()
+                    };
+
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 4));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `pubchem_${item.cid}.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                };
+                reader.readAsDataURL(blob);
+            } catch (e) {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(item, null, 4));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `pubchem_${item.cid}.json`);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            }
+        }
+    </script>
+</body>
+</html>

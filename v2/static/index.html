@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PubChem Advanced Search Builder</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+        h1 { font-size: 1.5rem; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        .section-title { font-weight: 600; font-size: 0.9rem; text-transform: uppercase; color: #64748b; margin-bottom: 15px; display: block; }
+        
+        /* Search Builder Styles */
+        .builder-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        select, input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        select:focus, input:focus { border-color: var(--primary); }
+        .field-select { width: 200px; }
+        .op-select { width: 100px; }
+        .value-input { flex: 1; }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: #64748b; }
+        .btn-outline:hover { background: #f1f5f9; }
+        .btn-danger { background: #fee2e2; color: #b91c1c; }
+        .btn-danger:hover { background: #fecaca; }
+
+        /* Query Preview */
+        .query-preview {
+            background: #f1f5f9;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 15px 0;
+            border-left: 4px solid var(--primary);
+            word-break: break-all;
+        }
+
+        /* Results */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .result-item {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            gap: 15px;
+        }
+        .result-item img { width: 80px; height: 80px; object-fit: contain; border: 1px solid #f1f5f9; border-radius: 4px; }
+        .result-info h3 { margin: 0 0 5px 0; font-size: 16px; color: var(--primary); }
+        .result-info p { margin: 2px 0; font-size: 12px; color: #64748b; }
+
+        .history-tag {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h1>🔍 PubChem Advanced Query Builder</h1>
+        
+        <div id="history-container" style="margin-bottom: 20px; display: none;">
+            <span class="section-title">Histórico de Buscas</span>
+            <div id="history-list"></div>
+        </div>
+
+        <span class="section-title">Construtor de Consulta</span>
+        <div id="builder-rows">
+            <!-- Rows added here via JS -->
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn btn-outline" onclick="addRow()">+ Adicionar Filtro</button>
+            <button id="download-all-btn" class="btn btn-outline" style="display: none; background: #dcfce7; color: #166534; border-color: #bbf7d0;" onclick="downloadAllResults()">📥 Download All (JSON)</button>
+            <button class="btn btn-primary" style="margin-left: auto;" onclick="executeSearch()">Pesquisar</button>
+        </div>
+
+        <div class="query-preview" id="query-display">Query: [Aguardando filtros...]</div>
+    </div>
+
+    <div id="loader" style="display: none; text-align: center; padding: 40px;">
+        <div style="border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        <p>Buscando no PubChem...</p>
+    </div>
+
+    <div id="results-container" class="results-grid"></div>
+</div>
+
+<script>
+    let history = [];
+    const fields = [
+        { id: 'all', label: 'Todos os Campos' },
+        { id: 'name', label: 'Nome da Substância' },
+        { id: 'cid', label: 'CID' },
+        { id: 'cas', label: 'Número CAS' },
+        { id: 'mw', label: 'Peso Molecular' },
+        { id: 'formula', label: 'Fórmula Molecular' },
+        { id: 'xlogp', label: 'XLogP' },
+        { id: 'hbond_d', label: 'Doadores H-Bond' },
+        { id: 'hbond_a', label: 'Aceptores H-Bond' }
+    ];
+
+    function addRow() {
+        const container = document.getElementById('builder-rows');
+        const row = document.createElement('div');
+        row.className = 'builder-row';
+        
+        const isFirst = container.children.length === 0;
+        
+        let html = '';
+        if (!isFirst) {
+            html += `
+                <select class="op-select logic-op" onchange="updateQueryDisplay()">
+                    <option value="AND">AND</option>
+                    <option value="OR">OR</option>
+                    <option value="NOT">NOT</option>
+                </select>
+            `;
+        } else {
+            html += `<div style="width: 100px"></div>`;
+        }
+
+        html += `
+            <select class="field-select" onchange="updateQueryDisplay()">
+                ${fields.map(f => `<option value="${f.id}">${f.label}</option>`).join('')}
+            </select>
+            <input type="text" class="value-input" placeholder="Valor..." oninput="updateQueryDisplay()">
+            <button class="btn btn-danger" onclick="this.parentElement.remove(); updateQueryDisplay()">×</button>
+        `;
+        
+        row.innerHTML = html;
+        container.appendChild(row);
+        updateQueryDisplay();
+    }
+
+    function buildQuery() {
+        const rows = document.querySelectorAll('.builder-row');
+        let queryParts = [];
+        
+        rows.forEach((row, index) => {
+            const field = row.querySelector('.field-select').value;
+            const value = row.querySelector('.value-input').value.trim();
+            const logic = row.querySelector('.logic-op')?.value || '';
+
+            if (value) {
+                let part = '';
+                if (field === 'mw' || field === 'xlogp') {
+                    part = `${value}[${field.toUpperCase()}]`;
+                } else if (field === 'all') {
+                    part = `"${value}"`;
+                } else {
+                    part = `"${value}"[${field.toUpperCase()}]`;
+                }
+
+                if (index > 0) {
+                    queryParts.push(logic);
+                }
+                queryParts.push(part);
+            }
+        });
+
+        return queryParts.join(' ');
+    }
+
+    function updateQueryDisplay() {
+        const query = buildQuery();
+        document.getElementById('query-display').innerText = query ? `Query: ${query}` : 'Query: [Aguardando filtros...]';
+    }
+
+    async function executeSearch() {
+        const query = buildQuery();
+        if (!query) return;
+
+        const loader = document.getElementById('loader');
+        const resultsContainer = document.getElementById('results-container');
+        
+        loader.style.display = 'block';
+        resultsContainer.innerHTML = '';
+
+        try {
+            const response = await fetch(`/api/search/advanced?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+
+            if (!response.ok) throw new Error(data.detail || 'Erro na busca');
+
+            history.push({ id: history.length + 1, query: query });
+            renderHistory();
+
+            if (data.results && data.results.length > 0) {
+                data.results.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'result-item';
+                    card.innerHTML = `
+                        <img src="${item.structure_url}" id="img-${item.cid}" onerror="this.src='https://pubchem.ncbi.nlm.nih.gov/images/noimage.png'">
+                        <div class="result-info">
+                            <h3>${item.common_name}</h3>
+                            <p><b>IUPAC:</b> ${item.iupac}</p>
+                            <p><b>CAS:</b> ${item.cas} | <b>MW:</b> ${item.weight}</p>
+                            <p><b>Fórmula:</b> ${item.formula}</p>
+                            <button class="btn btn-outline" style="margin-top: 10px; font-size: 11px;" onclick="downloadJson(${JSON.stringify(item).replace(/"/g, '&quot;')})">📥 Download JSON</button>
+                        </div>
+                    `;
+                    resultsContainer.appendChild(card);
+                });
+            } else {
+                resultsContainer.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #64748b;">Nenhum resultado encontrado.</p>';
+            }
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    async function downloadJson(item) {
+        try {
+            const response = await fetch(item.structure_url);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            
+            reader.onloadend = function() {
+                const base64data = reader.result;
+                const exportData = {
+                    ...item,
+                    image_base64: base64data,
+                    download_timestamp: new Date().toISOString()
+                };
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 4));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `pubchem_${item.cid}.json`);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            };
+            reader.readAsDataURL(blob);
+        } catch (e) {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(item, null, 4));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `pubchem_${item.cid}.json`);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+    }
+
+    function renderHistory() {
+        const container = document.getElementById('history-container');
+        const list = document.getElementById('history-list');
+        container.style.display = 'block';
+        list.innerHTML = history.map(h => `
+            <span class="history-tag" title="${h.query}" onclick="useHistory(${h.id})">#${h.id}</span>
+        `).join('');
+    }
+
+    function useHistory(id) {
+        const rows = document.querySelectorAll('.builder-row');
+        if (rows.length > 0) {
+            const lastInput = rows[rows.length - 1].querySelector('.value-input');
+            lastInput.value += (lastInput.value ? ' ' : '') + `#${id}`;
+            updateQueryDisplay();
+        }
+    }
+
+    addRow();
+</script>
+
+<style>
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>
